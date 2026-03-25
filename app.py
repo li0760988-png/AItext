@@ -7,7 +7,7 @@ from datetime import datetime
 # ========= 基础配置 =========
 st.set_page_config(page_title="AI对话实验", page_icon="💬", layout="centered")
 
-DEEPSEEK_API_KEY = "sk-249b2b16102d4b08a7d0342ad748cc5b"
+DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 MAX_TURNS = 6
 SAVE_DIR = "data"
