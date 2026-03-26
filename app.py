@@ -211,7 +211,7 @@ with st.sidebar:
     st.write(f"最多用户发言轮数：{MAX_TURNS}")
     st.write(f"最短交流时间：{MIN_CHAT_MINUTES} 分钟")
 
-    if st.button("开始新实验"):
+    if st.button("开始聊天"):
         st.session_state.messages = []
         st.session_state.chat_started = True
         st.session_state.finished = False
