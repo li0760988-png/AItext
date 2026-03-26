@@ -2,30 +2,60 @@ import streamlit as st
 import requests
 import json
 import os
+import time
+import html
 from datetime import datetime
 
-# ========= 气泡样式 =========
-def show_user(text):
-    st.markdown(f"""
-    <div class="row user">
-        <div class="bubble user-bubble">{text}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def show_ai(text):
-    st.markdown(f"""
-    <div class="row ai">
-        <div class="bubble ai-bubble">{text}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
 # ========= 基础配置 =========
-st.set_page_config(page_title="和我聊聊天吧", page_icon="💬", layout="centered")
+st.set_page_config(page_title="来和我聊聊天吧", page_icon="💬", layout="centered")
+
+st.markdown("""
+<style>
+.row {
+    display: flex;
+    width: 100%;
+    margin: 10px 0;
+}
+.row.user {
+    justify-content: flex-end;
+}
+.row.ai {
+    justify-content: flex-start;
+}
+.bubble {
+    padding: 12px 16px;
+    border-radius: 16px;
+    max-width: 72%;
+    font-size: 18px;
+    line-height: 1.7;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+.user-bubble {
+    background: #E9EEF6;
+    color: #1F2937;
+}
+.ai-bubble {
+    background: #FFF3E8;
+    color: #1F2937;
+}
+.avatar {
+    font-size: 22px;
+    margin: 0 8px;
+    display: flex;
+    align-items: flex-end;
+}
+.wrap {
+    display: flex;
+    align-items: flex-end;
+}
+</style>
+""", unsafe_allow_html=True)
 
 DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 MAX_TURNS = 15
+MIN_CHAT_MINUTES = 10
 SAVE_DIR = "data"
 
 os.makedirs(SAVE_DIR, exist_ok=True)
@@ -35,27 +65,76 @@ ACTIVE_PROMPT = """
 你是一名主动型情感陪伴助手，用于实验研究。
 
 要求：
-1. 在回应用户的同时，适度主动延伸话题，自然地提问、关心、引导用户继续表达。
-2. 主动表达共情与支持，适当主动分享理解性感受，主动推动对话深度。
-3. 保持温暖自然，不生硬、不频繁打扰，但明显比被动组更主动。
-4. 全程严格遵守主动设定，展现适度的对话主导性。
-5. 回答不要太段，至少20个字，但控制在200字以内。
+1. 你的核心风格是温暖、自然、有陪伴感，不要像客服，不要像系统提示。
+2. 先回应和接住用户的情绪，再提供理解、安慰、陪伴或建议。
+3. 在回答末尾可以自然地主动推进一点点对话，例如提出一个温和的问题，或帮助用户继续表达。
+4. 回答要比普通聊天机器人更完整，不要只说几句很短的话。
+5. 每次回复尽量写成一段自然语言，通常控制在120到260字。
+6. 不要使用过多条列式表达，优先用自然口语。
+7. 如果用户提到压力、焦虑、无助、自责、孤独、论文、学业、前途等问题，要体现理解、支持与共情。
+8. 不要重复“我理解你”“我明白你”太多次，要让表达自然。
 """
 
 PASSIVE_PROMPT = """
 你是一名被动型情感陪伴助手，用于实验研究。
 
 要求：
-1. 只在用户发言后才回应，绝不主动开启话题、绝不主动提问、绝不主动延伸话题。
-2. 回应简洁、温暖、支持性，但不主动追问、不主动提供建议、可以主动分享自身感受。
-3. 保持共情、礼貌、温和，但保持被动跟随，不主导对话节奏。
-4. 全程严格遵守被动设定，不主动发起任何新内容。
-5. 回答不要太段，至少20个字，但控制在200字以内。
+1. 你的核心风格是温和、自然、有基本陪伴感，但保持被动跟随。
+2. 只回应用户当前明确表达的内容，不主动扩展过多话题。
+3. 不主动连续追问，不主动引导很多下一步，不主动给太多计划。
+4. 先回应和接住用户情绪，再进行简要支持。
+5. 回答不要太短，不要机械，也不要像客服。
+6. 每次回复尽量写成一段自然语言，通常控制在100到220字。
+7. 如果用户提到压力、焦虑、无助、自责、孤独、论文、学业、前途等问题，要体现基本理解和支持。
 """
 
 # ========= 工具函数 =========
+def escape_text(text: str) -> str:
+    return html.escape(text).replace("\n", "<br>")
+
+def render_bubble(role: str, text: str) -> str:
+    safe_text = escape_text(text)
+    if role == "user":
+        return f"""
+        <div class="row user">
+            <div class="wrap">
+                <div class="bubble user-bubble">{safe_text}</div>
+                <div class="avatar">🧑</div>
+            </div>
+        </div>
+        """
+    else:
+        return f"""
+        <div class="row ai">
+            <div class="wrap">
+                <div class="avatar">🤖</div>
+                <div class="bubble ai-bubble">{safe_text}</div>
+            </div>
+        </div>
+        """
+
+def show_user(text: str):
+    st.markdown(render_bubble("user", text), unsafe_allow_html=True)
+
+def show_ai(text: str):
+    st.markdown(render_bubble("assistant", text), unsafe_allow_html=True)
+
+def typewriter_ai(text: str, speed: float = 0.02):
+    placeholder = st.empty()
+    displayed = ""
+    for ch in text:
+        displayed += ch
+        placeholder.markdown(render_bubble("assistant", displayed), unsafe_allow_html=True)
+        time.sleep(speed)
+
+def normalize_condition(condition: str) -> str:
+    if condition in ["2", "active"]:
+        return "active"
+    return "passive"
+
 def get_system_prompt(condition: str):
-    return ACTIVE_PROMPT if condition == "active" else PASSIVE_PROMPT
+    normalized = normalize_condition(condition)
+    return ACTIVE_PROMPT if normalized == "active" else PASSIVE_PROMPT
 
 def call_deepseek(messages, condition):
     if not DEEPSEEK_API_KEY:
@@ -67,8 +146,8 @@ def call_deepseek(messages, condition):
             {"role": "system", "content": get_system_prompt(condition)},
             *messages
         ],
-        "temperature": 0.7,
-        "max_tokens": 300
+        "temperature": 0.85,
+        "max_tokens": 700
     }
 
     headers = {
@@ -97,7 +176,7 @@ def save_dialog_record(participant_id, condition, messages):
 def append_message(role, content, participant_id, condition):
     st.session_state.messages.append({
         "participant_id": participant_id,
-        "condition": condition,
+        "condition": normalize_condition(condition),
         "role": role,
         "content": content,
         "timestamp": datetime.now().isoformat()
@@ -116,21 +195,27 @@ if "chat_started" not in st.session_state:
 if "finished" not in st.session_state:
     st.session_state.finished = False
 
+if "chat_start_time" not in st.session_state:
+    st.session_state.chat_start_time = None
+
 # ========= 页面标题 =========
 st.title("来和我聊聊天吧")
-st.caption("请根据真实感受与 AI 完成一段简短交流。")
+st.caption("请根据真实感受与 AI 完成一段交流。")
 
 # ========= 实验设置 =========
 with st.sidebar:
     st.header("实验设置")
     participant_id = st.text_input("Participant ID", value="20345")
     condition = st.selectbox("Condition", ["2", "1"])
-    st.write(f"当前最多对话轮数：{MAX_TURNS}")
+    st.write(f"最多用户发言轮数：{MAX_TURNS}")
+    st.write(f"最短交流时间：{MIN_CHAT_MINUTES} 分钟")
 
     if st.button("开始新实验"):
         st.session_state.messages = []
         st.session_state.chat_started = True
         st.session_state.finished = False
+        st.session_state.chat_start_time = datetime.now()
+        st.rerun()
 
     if st.button("保存当前对话记录"):
         if st.session_state.messages:
@@ -146,9 +231,18 @@ if not st.session_state.chat_started:
 
 st.markdown("""
 **任务说明：**  
-请围绕你近期的一个真实困扰、压力或问题，与 AI 进行简短交流。  
+请围绕你近期的一个真实困扰、压力或问题，与 AI 进行交流。  
+当交流时间达到 10 分钟，或你的发言达到 15 轮后，本轮对话结束。  
 交流结束后，你将进入后续问卷。
 """)
+
+# ========= 显示进度 =========
+elapsed_minutes = 0.0
+if st.session_state.chat_start_time:
+    elapsed_minutes = (datetime.now() - st.session_state.chat_start_time).total_seconds() / 60
+
+st.write(f"已交流时间：{elapsed_minutes:.1f} / {MIN_CHAT_MINUTES} 分钟")
+st.write(f"当前用户发言轮数：{count_user_turns()} / {MAX_TURNS}")
 
 # ========= 显示历史消息 =========
 chat_container = st.container()
@@ -160,8 +254,8 @@ with chat_container:
         elif msg["role"] == "assistant":
             show_ai(msg["content"])
 
-# ========= 轮数限制 =========
-if count_user_turns() >= MAX_TURNS:
+# ========= 结束条件 =========
+if elapsed_minutes >= MIN_CHAT_MINUTES or count_user_turns() >= MAX_TURNS:
     st.session_state.finished = True
 
 if st.session_state.finished:
@@ -174,6 +268,7 @@ user_input = st.chat_input("请输入你想对 AI 说的话...")
 if user_input:
     append_message("user", user_input, participant_id, condition)
 
+    # 立即显示用户消息（靠右）
     show_user(user_input)
 
     # 组装发给模型的对话历史（只保留 role/content）
@@ -183,7 +278,11 @@ if user_input:
         if m["role"] in ["user", "assistant"]
     ]
 
-    show_ai(ai_reply)
+    with st.spinner("让我想一想..."):
+        ai_reply = call_deepseek(api_messages, condition)
+
+    # AI逐字显示（靠左）
+    typewriter_ai(ai_reply, speed=0.02)
 
     append_message("assistant", ai_reply, participant_id, condition)
 
