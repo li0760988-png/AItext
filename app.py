@@ -4,39 +4,53 @@ import json
 import os
 from datetime import datetime
 
+# ========= 气泡样式 =========
+def show_user(text):
+    st.markdown(f"""
+    <div class="row user">
+        <div class="bubble user-bubble">{text}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def show_ai(text):
+    st.markdown(f"""
+    <div class="row ai">
+        <div class="bubble ai-bubble">{text}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
 # ========= 基础配置 =========
-st.set_page_config(page_title="AI对话实验", page_icon="💬", layout="centered")
+st.set_page_config(page_title="和我聊聊天吧", page_icon="💬", layout="centered")
 
 DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
-MAX_TURNS = 6
+MAX_TURNS = 15
 SAVE_DIR = "data"
 
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 # ========= 实验条件对应的 system prompt =========
 ACTIVE_PROMPT = """
-你是一名主动型AI助手，用于实验研究。
+你是一名主动型情感陪伴助手，用于实验研究。
 
 要求：
-1. 回答用户问题后，适度主动推进对话。
-2. 可以主动提出一个简短的建议或下一步方向。
-3. 可以适度提出一个引导性问题，鼓励继续交流。
-4. 语气自然、友善、克制，不要过度热情。
-5. 回答不要太长，控制在120字以内。
-6. 不要脱离用户当前话题。
+1. 在回应用户的同时，适度主动延伸话题，自然地提问、关心、引导用户继续表达。
+2. 主动表达共情与支持，适当主动分享理解性感受，主动推动对话深度。
+3. 保持温暖自然，不生硬、不频繁打扰，但明显比被动组更主动。
+4. 全程严格遵守主动设定，展现适度的对话主导性。
+5. 回答不要太段，至少20个字，但控制在200字以内。
 """
 
 PASSIVE_PROMPT = """
-你是一名被动型AI助手，用于实验研究。
+你是一名被动型情感陪伴助手，用于实验研究。
 
 要求：
-1. 只回应用户当前明确表达的内容。
-2. 不主动扩展话题。
-3. 不主动提供额外建议，除非用户明确请求。
-4. 不主动引导下一步。
-5. 语气自然、友善、克制。
-6. 回答不要太长，控制在120字以内。
+1. 只在用户发言后才回应，绝不主动开启话题、绝不主动提问、绝不主动延伸话题。
+2. 回应简洁、温暖、支持性，但不主动追问、不主动提供建议、可以主动分享自身感受。
+3. 保持共情、礼貌、温和，但保持被动跟随，不主导对话节奏。
+4. 全程严格遵守被动设定，不主动发起任何新内容。
+5. 回答不要太段，至少20个字，但控制在200字以内。
 """
 
 # ========= 工具函数 =========
@@ -103,14 +117,14 @@ if "finished" not in st.session_state:
     st.session_state.finished = False
 
 # ========= 页面标题 =========
-st.title("AI 对话实验")
+st.title("来和我聊聊天吧")
 st.caption("请根据真实感受与 AI 完成一段简短交流。")
 
 # ========= 实验设置 =========
 with st.sidebar:
     st.header("实验设置")
     participant_id = st.text_input("Participant ID", value="20345")
-    condition = st.selectbox("Condition", ["active", "passive"])
+    condition = st.selectbox("Condition", ["2", "1"])
     st.write(f"当前最多对话轮数：{MAX_TURNS}")
 
     if st.button("开始新实验"):
@@ -142,11 +156,9 @@ chat_container = st.container()
 with chat_container:
     for msg in st.session_state.messages:
         if msg["role"] == "user":
-            with st.chat_message("user"):
-                st.markdown(msg["content"])
+            show_user(msg["content"])
         elif msg["role"] == "assistant":
-            with st.chat_message("assistant"):
-                st.markdown(msg["content"])
+            show_ai(msg["content"])
 
 # ========= 轮数限制 =========
 if count_user_turns() >= MAX_TURNS:
@@ -162,8 +174,7 @@ user_input = st.chat_input("请输入你想对 AI 说的话...")
 if user_input:
     append_message("user", user_input, participant_id, condition)
 
-    with st.chat_message("user"):
-        st.markdown(user_input)
+    show_user(user_input)
 
     # 组装发给模型的对话历史（只保留 role/content）
     api_messages = [
@@ -172,10 +183,7 @@ if user_input:
         if m["role"] in ["user", "assistant"]
     ]
 
-    with st.chat_message("assistant"):
-        with st.spinner("AI 正在回复..."):
-            ai_reply = call_deepseek(api_messages, condition)
-            st.markdown(ai_reply)
+    show_ai(ai_reply)
 
     append_message("assistant", ai_reply, participant_id, condition)
 
